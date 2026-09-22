@@ -257,8 +257,23 @@ Jeder endet mit: „Öffne die genannten Dateien, statt aus dem Gedächtnis zu a
 |---|---|---|---|
 | `grilling` + `grill-me` | mattpocock/skills | Anforderungen in Interview-Runden schärfen, Lücken schliessen | Hinweisblock: Deutsch, REQUIREMENTS vorher greppen, Ergebnisse sofort in REQUIREMENTS/ADR/Plan persistieren |
 | `council` | Karpathys LLM Council | Beratung bei Unsicherheit: 5 Berater parallel → anonyme Gegenprüfung → Vorsitzender | Name = Ordnername, Deutsch, **nur auf Zustimmung** (Claude fragt „Soll ich den Council fragen?“), Berater/Prüfer Sonnet, Vorsitz Opus, keine HTML-Ausgabe, Architekturergebnis als ADR |
-| `qa-swarm` | pauldambra/dotfiles | PR-Review: Router (Sonnet) über den ganzen Diff, Delegation riskanter Hunks (Opus) an Linsen `qa-team`, `security-audit`, `reviewer`, `xp-reviewer`; Inline-Kommentare + eine Sticky-Zusammenfassung | Linsen **lokal** unter `references/` neu schreiben (Stack-spezifisch), `coding-standards.md` als Pflichtlektüre, Basis `development`, Pflicht-Delegation bei Auth/Migration/Geld/Personendaten/CI/>400 Zeilen, Bot-Kennung auf Deutsch, Review per `gh api … --input <json>` posten, `event: COMMENT` |
+| `qa-swarm` | pauldambra/dotfiles | PR-Review: Router (Sonnet) über den ganzen Diff, Delegation riskanter Hunks (Opus) an Linsen `qa-team`, `security-audit`, `reviewer`, `xp-reviewer`; Inline-Kommentare + eine Sticky-Zusammenfassung | **Flach statt verschachtelt** (siehe unten), Linsen **lokal** unter `references/` neu schreiben (Stack-spezifisch), `coding-standards.md` als Pflichtlektüre, Basis `development`, Pflicht-Delegation bei Auth/Migration/Geld/Personendaten/CI/>400 Zeilen, Bot-Kennung auf Deutsch, Review per `gh api … --input <json>` posten, `event: COMMENT` |
 | `review-triage` | pauldambra/dotfiles | Einstieg nach jedem PR: startet qa-swarm, sortiert Threads (umsetzbar → fixen und pushen; Kleinigkeit → antworten und schliessen; unklar → Autonomie-Leiter; menschlich → nie anfassen); äussere Schleife max. 3 Runden; Bericht mit offenen Punkten sortiert für den Menschen | `paul-pair` durch lokale `references/autonomy-ladder.md` ersetzen (Pflicht-Rückfrage bei Architektur, Schema, Auth, Geld, Abhängigkeiten, Infra), `pr-shepherd`/`ci-shepherd`/`stamphog` entfernen, Fixes nur bei grünen Tests pushen |
+
+### qa-swarm flach aufbauen – eine Persona, ein Agent
+
+Das Original sieht zwei Ebenen vor: die Hauptsession startet vier Reviewer parallel, und einer davon (`qa-team`) startet intern nochmals eigene Spezialisten (Security, Datenbank, Performance …). Diese zweite Ebene wird hier **entfernt**, aus zwei Gründen:
+
+1. Sie ist technisch unzuverlässig (siehe Stolperfallen) und degradiert im Fehlerfall still zu einem einzigen geteilten Kontext.
+2. Sie verdichtet Befunde zweimal. Jede Verdichtung ist eine Stelle, an der Zeilennummern verrutschen, Formulierungen geglättet und Details aus dem Gedächtnis ergänzt werden.
+
+**Aufbau stattdessen:**
+
+- Der Router läuft in der Hauptsession und liefert nur die Zuordnung Hunk → Linse. Er delegiert nicht selbst.
+- Die Hauptsession ruft **je Linse genau einen Agenten** auf – auch für die Spezialisten, die im Original innerhalb von `qa-team` liefen. `qa-team` als Zwischenebene entfällt und wird durch seine Einzellinsen ersetzt.
+- Jede Linse bekommt ihr Modell ausdrücklich gesetzt (nicht vom Aufrufer geerbt): Opus für Auth, Migrationen, Geld, Personendaten; Sonnet für Stil, Benennung, Beobachtbarkeit.
+- **Rückgabe knapp halten, Befunde ins Repo.** Jede Linse schreibt ihre Befunde nach `.qa-review/<runde>/<linse>.md` und gibt an die Hauptsession nur eine Zeile zurück: Pfad, Anzahl Befunde, höchste Schwere. Die Hauptsession liest danach gezielt die Dateien, die sie für Deduplizierung und Verdikt braucht. Das spart Kontext wie das Nisten, aber ohne die zweite Verdichtung – und der Rohbefund bleibt nachlesbar, statt nur als Zusammenfassung zu existieren.
+- **Ausgefallene Linsen werden benannt.** Läuft eine Linse nicht, steht das im Bericht und in der Sticky-Zusammenfassung. Ein stiller Ausfall ist von einer sauberen Runde nicht zu unterscheiden – dieselbe Logik wie bei den Hooks.
 
 **Sicherheitsprüfung jedes Fremd-Skills vor Übernahme:**
 
@@ -270,7 +285,7 @@ Jeder endet mit: „Öffne die genannten Dateien, statt aus dem Gedächtnis zu a
 
 **Stolperfallen:**
 
-- Subagenten können **keine** weiteren Subagenten starten – mehrstufige Abläufe (Council, qa-team-Personas) steuert die Hauptsession, bzw. ein Agent arbeitet Personas nacheinander ab.
+- **Verschachtelte Subagenten sind unzuverlässig – Hierarchie flach halten.** Offiziell dürfen Subagenten eigene Subagenten starten (Tiefe bis 5, `Agent` muss im `tools`-Frontmatter stehen). In der Praxis wird das `Agent`/`Task`-Werkzeug je nach Subagenten-Typ und Version still weggefiltert; der Fan-out fällt dann **lautlos** auf einen einzigen Kontext zurück, in dem ein Agent alle Personas nacheinander abarbeitet. Genau das soll nicht passieren: geteilter Kontext heisst gegenseitige Beeinflussung und mehr Halluzinationen, und der Ausfall ist von aussen nicht sichtbar. Deshalb gilt hier: **mehrstufige Abläufe (Council, Review-Linsen) startet ausschliesslich die Hauptsession, ein Aufruf je Persona.** Kein Subagent versucht, weitere Subagenten zu starten.
 - `disable-model-invocation: true` verhindert, dass Claude den Skill nach einem „Ja“ des Nutzers selbst startet – nur für reine Aliase (`grill-me`) verwenden.
 - Lokale Anpassungen werden beim Update über `skills-lock.json` überschrieben.
 
@@ -290,7 +305,7 @@ Anfangs **bewusst keiner**. Die Übersicht liegt im Vault, **nicht** unter `.cla
 4. Zustandsordner `todos/` und `plans/` (`open`, `in-progress`, `done`, `deleted`) mit `.gitkeep`.
 5. Hooks + `settings.json` + `hooks-test`; **Test ausführen und Ergebnis zeigen.**
 6. Skills nach `.claude/skills/`, Sicherheitsprüfung, Anpassungen.
-7. `.gitignore` (`.env*` ausser `.env.example`, Keys, Build-Ausgaben, `.obsidian/workspace*.json`, `.claude/settings.local.json`) und `.gitattributes`.
+7. `.gitignore` (`.env*` ausser `.env.example`, Keys, Build-Ausgaben, `.obsidian/workspace*.json`, `.claude/settings.local.json`, `.qa-review/`) und `.gitattributes`.
 8. Stop-Hook einmal durchlaufen lassen: keine verwaisten Dateien, `CLAUDE.md` < 4096 Bytes, Memory leer.
 9. **Keinen** konkreten Plan und **kein** konkretes Todo anlegen – nur die Struktur, damit sichtbar ist, dass alles initialisiert ist.
 10. Nicht committen – zeigen, was entstanden ist, und auf „commit“ warten.
