@@ -19,12 +19,13 @@ Platzhalter: `<projekt>` = Projektname in kebab-case, `<docs>` = `<projekt>-docs
 
 Weitere Widersprüche in Vorgaben werden ebenfalls gefragt, nicht still aufgelöst.
 
-## 1. Die vier Prinzipien
+## 1. Die fünf Prinzipien
 
 1. **Wenig im Kontext, viel im Repo.** Dauerhaft geladen ist nur `CLAUDE.md`: harte Regeln plus eine Wegweiser-Tabelle. Alles andere wird gezielt nachgeladen.
 2. **Wissen gehört ins Repo, nicht ins Memory.** Das lokale Claude-Memory bleibt leer. Wer klont, hat den vollständigen Stand – auf jedem Gerät.
 3. **Regeln, die sich selbst prüfen.** Was maschinell prüfbar ist, läuft als Hook, nicht als Bitte im Prompt.
 4. **Grosse Dateien werden gegrept, nicht am Stück gelesen** (ab etwa 500 Zeilen).
+5. **Eine Session, eine Aufgabe.** Standardmässig erledigt eine Session genau eine Aufgabe. Das Review eines PR läuft in einer **neuen** Session, die nur einen kurzen Auftrag und das Repo kennt. Zwei Gründe: Ein frischer Kontext kostet deutlich weniger Tokens als eine Session, die die ganze Umsetzung mitschleppt. Und der Reviewer kennt die Begründungen der Umsetzung nicht – er beurteilt den Code, nicht das Gespräch darüber. Das senkt Bestätigungsfehler und Halluzinationen (Befunde „aus dem Gedächtnis“ statt aus dem Diff).
 
 ## 2. `CLAUDE.md` – Aufbau (Grenze: 4096 Bytes)
 
@@ -49,6 +50,7 @@ Wird `CLAUDE.md` per `/init` angelegt, muss sie mit dem von `/init` vorgegebenen
 10. **Tests nie anpassen, nur damit sie grün werden.** Im Zweifel nachfragen.
 11. **Fertig heisst geprüft.** Manuell Prüfbares kommt nach `todos/manual-e2e-testing.md`.
 12. **Unsicherheit mit echter Abwägung:** fragen „Soll ich den Council fragen?“. Nicht ungefragt starten.
+13. **Eine Session, eine Aufgabe.** Kein Review in der Umsetzungs-Session: Nach dem PR einen Review-Auftrag für eine neue Session vorschlagen (`collaboration-rules.md`).
 
 ## Wegweiser – Aufgabe → Datei
 
@@ -70,7 +72,7 @@ Wird `CLAUDE.md` per `/init` angelegt, muss sie mit dem von `/init` vorgegebenen
 
 ## Ablauf, kurz
 
-Aufgabe verstehen → Datei aus dem Wegweiser öffnen → bei Lücken `grilling` → bei grösseren Sachen Plan unter `plans/open/` und bestätigen lassen → umsetzen → prüfen → committen → „PR nach `development`?“ → bei Ja `review-triage` (startet `qa-swarm`) → Todo/Lessons nachziehen.
+Aufgabe verstehen → Datei aus dem Wegweiser öffnen → bei Lücken `grilling` → bei grösseren Sachen Plan unter `plans/open/` und bestätigen lassen → umsetzen → prüfen → Ergebnisbericht, Lessons → committen → Dialog „PR nach `development`?“ → bei Ja PR stellen und Review-Auftrag ausgeben → **Session endet**. Neue Session: Auftrag einfügen → `review-triage` (startet `qa-swarm`) → Todo/Plan nach `done/`.
 ```
 
 Weitere fachliche Dateien (Datenmodell, Komponentenkarte, Ereigniskatalog …) kommen erst, wenn das Projekt sie braucht – jede mit Wegweiser-Zeile.
@@ -89,19 +91,45 @@ Führt die harten Regeln aus, ohne sie zu wiederholen.
 
 ### Ablauf einer Aufgabe
 
-**Klein** (ein Handgriff): direkt umsetzen, prüfen, fertig. Kein Plan, kein Todo.
+**Grundsatz: eine Session, eine Aufgabe.** Eine Session erledigt standardmässig genau eine Aufgabe und endet danach. Planung, Umsetzung und Review sind je eigene Sessions; die Übergabe läuft über Dateien im Repo (Todo, Plan, PR-Beschreibung) und einen kurzen Auftrag, nie über Gesprächswissen. Eine neue Session heisst: neues Terminal oder `/clear`.
 
-**Grösser** (mehrere Dateien, offene Entscheidungen, mehr als eine Sitzung): Planung und Umsetzung in **getrennten Sitzungen**.
+**Klein** (ein Handgriff): direkt umsetzen, prüfen, committen. Kein Plan, kein Todo. Wird ein PR gewünscht, gilt Schritt 7 unten genauso.
+
+**Grösser** (mehrere Dateien, offene Entscheidungen, mehr als eine Session):
 
 1. **Lücken schliessen** mit `grilling`; Ergebnisse in REQUIREMENTS oder Plan.
 2. **Plan schreiben** unter `plans/open/<name>.md` – für eine Session ohne Vorkontext.
-3. **Bestätigen lassen.** Erst danach Code; Plan per `git mv` nach `in-progress/`.
-4. **Umsetzen.** Der Plan wird mitgeführt, nicht nachträglich passend gemacht.
+3. **Bestätigen lassen.** Erst danach Code. **Session endet.**
+4. **Umsetzen (neue Session).** Plan per `git mv` nach `in-progress/`. Der Plan wird mitgeführt, nicht nachträglich passend gemacht.
 5. **Prüfen.** Automatisierte Tests grün. Manuelles nach `todos/manual-e2e-testing.md`, **thematisch sortiert** – wie ein Einkauf nach Regalen, damit man beim Abarbeiten nicht zwischen Seiten hin und her springt.
-6. **Committen**, dann fragen: „Soll ich einen PR nach `development` stellen?“ Bei Ja: PR + `review-triage`.
-7. **Nachziehen.** Todo und Plan per `git mv` nach `done/`, Ergebnisbericht. Falle gefunden → `lessons/`.
+6. **Nachziehen, dann committen.** Ergebnisbericht in Todo und Plan. Falle gefunden → `lessons/`.
+7. **PR-Dialog.** Claude fragt per Auswahldialog: „Soll ich einen PR nach `development` stellen?“
+   - **Nein:** Todo und Plan per `git mv` nach `done/`, committen. Session endet.
+   - **Ja:** Branch pushen, PR stellen (die PR-Beschreibung nennt Todo und Plan), dann den **Review-Auftrag** ausgeben (siehe unten). Todo und Plan bleiben in `in-progress/` – der Ordner zeigt: wartet auf Review. **Session endet**; Claude startet `review-triage` hier nicht.
+8. **Review (neue Session).** Der Mensch fügt den Auftrag ein. `review-triage` läuft, fixt und pusht. Zum Schluss: Abschnitt „Review“ im Ergebnisbericht (Runden, umgesetzte Befunde, offene Punkte), Todo und Plan per `git mv` nach `done/`, committen, pushen.
+
+Nur wenn der Mensch es ausdrücklich verlangt, läuft das Review in derselben Session.
 
 **Fertig heisst:** Code steht, alle automatisierten Tests geschrieben und grün. Eine Aufgabe darf abgeschlossen sein, während ihre manuelle Prüfung noch offen ist – nur dann.
+
+### Review-Auftrag für die neue Session
+
+Claude gibt den Auftrag als Codeblock aus, bereit zum Kopieren. Er beginnt mit dem Skill-Aufruf, damit der Skill sofort startet; der Rest geht als Argument mit.
+
+```text
+/review-triage <pr-nummer>
+PR: #<pr-nummer>, <branch> → development
+Todo: <docs>/todos/in-progress/<todo>.md
+Plan: <docs>/plans/in-progress/<plan>.md   (oder: kein Plan)
+Tests: <befehl> – zuletzt <n> grün
+Abschluss: Ergebnisbericht um „Review“ ergänzen, Todo/Plan per git mv nach done/, committen, pushen.
+```
+
+Regeln für den Auftrag:
+
+- **Nur Zeiger, keine Begründungen.** Keine Erklärung, warum etwas so gebaut ist, keine Zusammenfassung des Gesprächs. Was der Reviewer wissen muss, steht in PR-Beschreibung, Todo und Plan; alles andere würde ihn auf die Sicht der Umsetzung festlegen.
+- **Höchstens zehn Zeilen.** Wird er länger, fehlt etwas in Todo oder Plan – dort nachtragen, nicht im Auftrag.
+- Ohne Todo (kleine Aufgabe) entfallen die Zeilen Todo/Plan; die PR-Beschreibung trägt den Kontext.
 
 ### Arbeitsregeln
 
@@ -139,7 +167,8 @@ todos/
   `ls <docs>/todos/*/p*.md | sed 's|.*/p[0-9]-\([0-9]\{3\}\)-.*|\1|' | sort -n | tail -1`
 - Priorität ändern = umbenennen, Nummer behalten. **Verschieben immer mit `git mv`.**
 - Gerüst: Frontmatter `titel`, `prioritaet`, `braucht`, `plan`, `anforderungen`; Abschnitte Kontext, Akzeptanzkriterien (Checkboxen), Betroffene Dateien.
-- Für eine Session ohne Vorkontext geschrieben; beim Abschluss ein **Ergebnisbericht** (was gebaut, Entscheidungen, Fallen, Anzahl grüner Tests).
+- Für eine Session ohne Vorkontext geschrieben; beim Abschluss ein **Ergebnisbericht** (was gebaut, Entscheidungen, Fallen, Anzahl grüner Tests). Nach einem Review kommt ein Abschnitt „Review“ dazu.
+- Wartet ein PR auf Review, bleibt das Todo in `in-progress/`; erst die Review-Session verschiebt es nach `done/`.
 
 ## 6. Pläne `plans/` (mit `plans/plans-overview.md`)
 
@@ -245,7 +274,7 @@ Skripte unter `.claude/hooks/`, verdrahtet in `.claude/settings.json`, beschrieb
 
 ### Zeiger-Skills (eigene, kein Wissensspeicher)
 
-- **`task-workflow`** – „Eine grössere Aufgabe planen, starten oder abschliessen …“ → `collaboration-rules.md`, `plans-overview.md`, `todos/README.md`, `manual-e2e-testing.md`, `skills-overview.md`.
+- **`task-workflow`** – „Eine grössere Aufgabe planen, starten oder abschliessen, einen PR stellen und den Review-Auftrag für eine neue Session erzeugen …“ → `collaboration-rules.md` (Abschnitt „Review-Auftrag“), `plans-overview.md`, `todos/README.md`, `manual-e2e-testing.md`, `skills-overview.md`.
 - **`project-docs`** – „Etwas in der Projektdoku ablegen, aktualisieren oder wiederfinden.“ → Wegweiser, Abgrenzungen, Konventionen; erinnert an die Wegweiser-Zeile. (Nicht `docs` nennen – kollidiert leicht mit globalen Skills.)
 - **`lesson`** – „Einen Fallstrick festhalten …“ → `lessons-overview.md`; eine Datei je Bereich; maschinell prüfbar → Hook.
 
@@ -258,7 +287,7 @@ Jeder endet mit: „Öffne die genannten Dateien, statt aus dem Gedächtnis zu a
 | `grilling` + `grill-me` | mattpocock/skills | Anforderungen in Interview-Runden schärfen, Lücken schliessen | Hinweisblock: Deutsch, REQUIREMENTS vorher greppen, Ergebnisse sofort in REQUIREMENTS/ADR/Plan persistieren |
 | `council` | Karpathys LLM Council | Beratung bei Unsicherheit: 5 Berater parallel → anonyme Gegenprüfung → Vorsitzender | Name = Ordnername, Deutsch, **nur auf Zustimmung** (Claude fragt „Soll ich den Council fragen?“), Berater/Prüfer Sonnet, Vorsitz Opus, keine HTML-Ausgabe, Architekturergebnis als ADR |
 | `qa-swarm` | pauldambra/dotfiles | PR-Review: Router (Sonnet) über den ganzen Diff, Delegation riskanter Hunks (Opus) an Linsen `qa-team`, `security-audit`, `reviewer`, `xp-reviewer`; Inline-Kommentare + eine Sticky-Zusammenfassung | **Flach statt verschachtelt** (siehe unten), Linsen **lokal** unter `references/` neu schreiben (Stack-spezifisch), `coding-standards.md` als Pflichtlektüre, Basis `development`, Pflicht-Delegation bei Auth/Migration/Geld/Personendaten/CI/>400 Zeilen, Bot-Kennung auf Deutsch, Review per `gh api … --input <json>` posten, `event: COMMENT` |
-| `review-triage` | pauldambra/dotfiles | Einstieg nach jedem PR: startet qa-swarm, sortiert Threads (umsetzbar → fixen und pushen; Kleinigkeit → antworten und schliessen; unklar → Autonomie-Leiter; menschlich → nie anfassen); äussere Schleife max. 3 Runden; Bericht mit offenen Punkten sortiert für den Menschen | `paul-pair` durch lokale `references/autonomy-ladder.md` ersetzen (Pflicht-Rückfrage bei Architektur, Schema, Auth, Geld, Abhängigkeiten, Infra), `pr-shepherd`/`ci-shepherd`/`stamphog` entfernen, Fixes nur bei grünen Tests pushen |
+| `review-triage` | pauldambra/dotfiles | Einstieg nach jedem PR, **in einer eigenen Session** (Start über den Review-Auftrag): startet qa-swarm, sortiert Threads (umsetzbar → fixen und pushen; Kleinigkeit → antworten und schliessen; unklar → Autonomie-Leiter; menschlich → nie anfassen); äussere Schleife max. 3 Runden; Bericht mit offenen Punkten sortiert für den Menschen | `paul-pair` durch lokale `references/autonomy-ladder.md` ersetzen (Pflicht-Rückfrage bei Architektur, Schema, Auth, Geld, Abhängigkeiten, Infra), `pr-shepherd`/`ci-shepherd`/`stamphog` entfernen, Fixes nur bei grünen Tests pushen. **Session-Trennung:** Eingabe ist die PR-Nummer (fehlt sie → nachfragen, nicht raten); gelesen werden nur PR-Beschreibung, Diff, `coding-standards.md` und die im Auftrag genannten Dateien; Abschluss wie im Auftrag (Ergebnisbericht „Review“, Todo/Plan nach `done/`) |
 
 ### qa-swarm flach aufbauen – eine Persona, ein Agent
 
@@ -291,7 +320,7 @@ Das Original sieht zwei Ebenen vor: die Hauptsession startet vier Reviewer paral
 
 ### `skills-overview.md`
 
-Grafik (Mermaid-Flowchart: Idee → grilling → REQUIREMENTS → Council? → ADR → task-workflow → Umsetzung → Tests/Commit → PR? → review-triage ⟲ qa-swarm → Merge durch Mensch) plus Tabellen: Stadium/Skill/Wann/Start, Modelle, Herkunft/Anpassung, Sicherheitsprüfung. Zusätzlich als PDF (z. B. HTML mit marked + mermaid von jsdelivr, gedruckt mit `msedge --headless=new --print-to-pdf --virtual-time-budget=20000`).
+Grafik (Mermaid-Flowchart: Idee → grilling → REQUIREMENTS → Council? → ADR → task-workflow → Umsetzung → Tests/Commit → PR? → Review-Auftrag → *neue Session* → review-triage ⟲ qa-swarm → Merge durch Mensch; Session-Grenzen als Subgraphen sichtbar machen) plus Tabellen: Stadium/Skill/Wann/Start, Modelle, Herkunft/Anpassung, Sicherheitsprüfung. Zusätzlich als PDF (z. B. HTML mit marked + mermaid von jsdelivr, gedruckt mit `msedge --headless=new --print-to-pdf --virtual-time-budget=20000`).
 
 ## 14. Subagenten `<docs>/agents-overview.md`
 
