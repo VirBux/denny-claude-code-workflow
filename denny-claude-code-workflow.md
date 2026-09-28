@@ -25,7 +25,7 @@ Weitere Widersprüche in Vorgaben werden ebenfalls gefragt, nicht still aufgelö
 2. **Wissen gehört ins Repo, nicht ins Memory.** Das lokale Claude-Memory bleibt leer. Wer klont, hat den vollständigen Stand – auf jedem Gerät.
 3. **Regeln, die sich selbst prüfen.** Was maschinell prüfbar ist, läuft als Hook, nicht als Bitte im Prompt.
 4. **Grosse Dateien werden gegrept, nicht am Stück gelesen** (ab etwa 500 Zeilen).
-5. **Eine Session, eine Aufgabe.** Standardmässig erledigt eine Session genau eine Aufgabe. Das Review eines PR läuft in einer **neuen** Session, die nur einen kurzen Auftrag und das Repo kennt. Zwei Gründe: Ein frischer Kontext kostet deutlich weniger Tokens als eine Session, die die ganze Umsetzung mitschleppt. Und der Reviewer kennt die Begründungen der Umsetzung nicht – er beurteilt den Code, nicht das Gespräch darüber. Das senkt Bestätigungsfehler und Halluzinationen (Befunde „aus dem Gedächtnis“ statt aus dem Diff).
+5. **Eine Session, eine Aufgabe.** Standardmässig erledigt eine Session genau eine Aufgabe. Die Umsetzung nach der Planung und das Review eines PR laufen je in einer **neuen** Session, die nur einen kurzen Auftrag und das Repo kennt. Übergeben wird per **Aufgaben-Chip** (`spawn_task`), den der Mensch nur noch anklickt. Zwei Gründe: Ein frischer Kontext kostet deutlich weniger Tokens als eine Session, die die ganze Umsetzung mitschleppt. Und der Reviewer kennt die Begründungen der Umsetzung nicht – er beurteilt den Code, nicht das Gespräch darüber. Das senkt Bestätigungsfehler und Halluzinationen (Befunde „aus dem Gedächtnis“ statt aus dem Diff).
 
 ## 2. `CLAUDE.md` – Aufbau (Grenze: 4096 Bytes)
 
@@ -50,7 +50,7 @@ Wird `CLAUDE.md` per `/init` angelegt, muss sie mit dem von `/init` vorgegebenen
 10. **Tests nie anpassen, nur damit sie grün werden.** Im Zweifel nachfragen.
 11. **Fertig heisst geprüft.** Manuell Prüfbares kommt nach `todos/manual-e2e-testing.md`.
 12. **Unsicherheit mit echter Abwägung:** fragen „Soll ich den Council fragen?“. Nicht ungefragt starten.
-13. **Eine Session, eine Aufgabe.** Kein Review in der Umsetzungs-Session: Nach dem PR einen Review-Auftrag für eine neue Session vorschlagen (`collaboration-rules.md`).
+13. **Eine Session, eine Aufgabe.** Folgeaufgaben (Umsetzung nach Planung, Review nach PR) immer als Chip (`spawn_task`) an eine neue Session übergeben, nicht als Chat-Prompt (`collaboration-rules.md`).
 
 ## Wegweiser – Aufgabe → Datei
 
@@ -72,7 +72,7 @@ Wird `CLAUDE.md` per `/init` angelegt, muss sie mit dem von `/init` vorgegebenen
 
 ## Ablauf, kurz
 
-Aufgabe verstehen → Datei aus dem Wegweiser öffnen → bei Lücken `grilling` → bei grösseren Sachen Plan unter `plans/open/` und bestätigen lassen → umsetzen → prüfen → Ergebnisbericht, Lessons → committen → Dialog „PR nach `development`?“ → bei Ja PR stellen und Review-Auftrag ausgeben → **Session endet**. Neue Session: Auftrag einfügen → `review-triage` (startet `qa-swarm`) → Todo/Plan nach `done/`.
+Aufgabe verstehen → Datei aus dem Wegweiser öffnen → bei Lücken `grilling` → bei grösseren Sachen Plan unter `plans/open/`, bestätigen lassen, Umsetzungs-Chip → **Session endet** → umsetzen → prüfen → Ergebnisbericht, Lessons → committen → Dialog „PR nach `development`?“ → bei Ja PR stellen und Review-Chip anlegen → **Session endet**. Neue Session per Klick → `review-triage` (startet `qa-swarm`) → Todo/Plan nach `done/`.
 ```
 
 Weitere fachliche Dateien (Datenmodell, Komponentenkarte, Ereigniskatalog …) kommen erst, wenn das Projekt sie braucht – jede mit Wegweiser-Zeile.
@@ -91,7 +91,7 @@ Führt die harten Regeln aus, ohne sie zu wiederholen.
 
 ### Ablauf einer Aufgabe
 
-**Grundsatz: eine Session, eine Aufgabe.** Eine Session erledigt standardmässig genau eine Aufgabe und endet danach. Planung, Umsetzung und Review sind je eigene Sessions; die Übergabe läuft über Dateien im Repo (Todo, Plan, PR-Beschreibung) und einen kurzen Auftrag, nie über Gesprächswissen. Eine neue Session heisst: neues Terminal oder `/clear`.
+**Grundsatz: eine Session, eine Aufgabe.** Eine Session erledigt standardmässig genau eine Aufgabe und endet danach. Planung, Umsetzung und Review sind je eigene Sessions; die Übergabe läuft über Dateien im Repo (Todo, Plan, PR-Beschreibung) und einen **Aufgaben-Chip** (siehe unten), nie über Gesprächswissen.
 
 **Klein** (ein Handgriff): direkt umsetzen, prüfen, committen. Kein Plan, kein Todo. Wird ein PR gewünscht, gilt Schritt 7 unten genauso.
 
@@ -99,37 +99,59 @@ Führt die harten Regeln aus, ohne sie zu wiederholen.
 
 1. **Lücken schliessen** mit `grilling`; Ergebnisse in REQUIREMENTS oder Plan.
 2. **Plan schreiben** unter `plans/open/<name>.md` – für eine Session ohne Vorkontext.
-3. **Bestätigen lassen.** Erst danach Code. **Session endet.**
-4. **Umsetzen (neue Session).** Plan per `git mv` nach `in-progress/`. Der Plan wird mitgeführt, nicht nachträglich passend gemacht.
+3. **Bestätigen lassen.** Erst danach Code. Todo und Plan committen und pushen, dann den **Umsetzungs-Chip** anlegen. **Session endet.**
+4. **Umsetzen (neue Session, per Klick auf den Chip).** Plan per `git mv` nach `in-progress/`. Der Plan wird mitgeführt, nicht nachträglich passend gemacht.
 5. **Prüfen.** Automatisierte Tests grün. Manuelles nach `todos/manual-e2e-testing.md`, **thematisch sortiert** – wie ein Einkauf nach Regalen, damit man beim Abarbeiten nicht zwischen Seiten hin und her springt.
 6. **Nachziehen, dann committen.** Ergebnisbericht in Todo und Plan. Falle gefunden → `lessons/`.
 7. **PR-Dialog.** Claude fragt per Auswahldialog: „Soll ich einen PR nach `development` stellen?“
    - **Nein:** Todo und Plan per `git mv` nach `done/`, committen. Session endet.
-   - **Ja:** Branch pushen, PR stellen (die PR-Beschreibung nennt Todo und Plan), dann den **Review-Auftrag** ausgeben (siehe unten). Todo und Plan bleiben in `in-progress/` – der Ordner zeigt: wartet auf Review. **Session endet**; Claude startet `review-triage` hier nicht.
-8. **Review (neue Session).** Der Mensch fügt den Auftrag ein. `review-triage` läuft, fixt und pusht. Zum Schluss: Abschnitt „Review“ im Ergebnisbericht (Runden, umgesetzte Befunde, offene Punkte), Todo und Plan per `git mv` nach `done/`, committen, pushen.
+   - **Ja:** Branch pushen, PR stellen (die PR-Beschreibung nennt Todo und Plan), dann den **Review-Chip** anlegen (siehe unten). Todo und Plan bleiben in `in-progress/` – der Ordner zeigt: wartet auf Review. **Session endet**; Claude startet `review-triage` hier nicht.
+8. **Review (neue Session, per Klick auf den Chip).** `review-triage` läuft, fixt und pusht. Zum Schluss: Abschnitt „Review“ im Ergebnisbericht (Runden, umgesetzte Befunde, offene Punkte), Todo und Plan per `git mv` nach `done/`, committen, pushen.
 
-Nur wenn der Mensch es ausdrücklich verlangt, läuft das Review in derselben Session.
+Nur wenn der Mensch es ausdrücklich verlangt, läuft die nächste Aufgabe in derselben Session.
 
 **Fertig heisst:** Code steht, alle automatisierten Tests geschrieben und grün. Eine Aufgabe darf abgeschlossen sein, während ihre manuelle Prüfung noch offen ist – nur dann.
 
-### Review-Auftrag für die neue Session
+### Übergabe an die nächste Session: der Chip
 
-Claude gibt den Auftrag als Codeblock aus, bereit zum Kopieren. Er beginnt mit dem Skill-Aufruf, damit der Skill sofort startet; der Rest geht als Argument mit.
+Endet eine Session mit einer Folgeaufgabe, legt Claude **immer einen Aufgaben-Chip** an (Werkzeug `spawn_task` der Claude-Desktop-App), keinen Prompt im Chat. Der Mensch klickt den Chip, und eine neue Session startet in einem eigenen Worktree mit genau diesem Auftrag. Das gilt nach der Planung (Umsetzungs-Chip, Schritt 3) und nach dem PR (Review-Chip, Schritt 7).
+
+Ein Chip hat drei Teile:
+
+- **Titel** – Handlungsanweisung, unter 60 Zeichen, z. B. „Setze p1-004 um: Schichtplanung“ oder „Arbeite Review von PR #12 ab“.
+- **Kurzbeschreibung** – ein, zwei Sätze für die Karte: was ansteht und warum jetzt.
+- **Auftrag** – der Prompt der neuen Session, nach den Vorlagen unten.
+
+Die neue Session startet in einem frischen Worktree und kennt nur, was gepusht ist. Deshalb vor dem Chip committen und pushen.
+
+**Umsetzungs-Auftrag** (nach der Planung):
+
+```text
+Setze die Aufgabe um, Ablauf nach <docs>/collaboration-rules.md ab Schritt 4.
+Todo: <docs>/todos/open/<todo>.md
+Plan: <docs>/plans/open/<plan>.md
+Branch: feature/<kurzname> von development
+Abschluss: Tests grün, Ergebnisbericht, committen, PR-Dialog.
+```
+
+**Review-Auftrag** (nach dem PR). Er beginnt mit dem Skill-Aufruf, damit der Skill sofort startet; der Rest geht als Argument mit.
 
 ```text
 /review-triage <pr-nummer>
-PR: #<pr-nummer>, <branch> → development
+PR: #<pr-nummer>, <branch> → development (zuerst gh pr checkout <pr-nummer>)
 Todo: <docs>/todos/in-progress/<todo>.md
 Plan: <docs>/plans/in-progress/<plan>.md   (oder: kein Plan)
 Tests: <befehl> – zuletzt <n> grün
 Abschluss: Ergebnisbericht um „Review“ ergänzen, Todo/Plan per git mv nach done/, committen, pushen.
 ```
 
-Regeln für den Auftrag:
+Regeln für jeden Auftrag:
 
-- **Nur Zeiger, keine Begründungen.** Keine Erklärung, warum etwas so gebaut ist, keine Zusammenfassung des Gesprächs. Was der Reviewer wissen muss, steht in PR-Beschreibung, Todo und Plan; alles andere würde ihn auf die Sicht der Umsetzung festlegen.
+- **Nur Zeiger, keine Begründungen.** Keine Erklärung, warum etwas so gebaut ist, keine Zusammenfassung des Gesprächs. Was die neue Session wissen muss, steht in PR-Beschreibung, Todo und Plan; alles andere würde sie auf die Sicht der vorigen Session festlegen.
 - **Höchstens zehn Zeilen.** Wird er länger, fehlt etwas in Todo oder Plan – dort nachtragen, nicht im Auftrag.
 - Ohne Todo (kleine Aufgabe) entfallen die Zeilen Todo/Plan; die PR-Beschreibung trägt den Kontext.
+- **Rückfall:** Steht `spawn_task` nicht zur Verfügung (Terminal-`claude`, Web), gibt Claude denselben Auftrag als Codeblock zum Kopieren aus; der Mensch startet die neue Session selbst (neues Terminal oder `/clear`).
+- Wird ein Chip hinfällig (Aufgabe erledigt, Auftrag überholt), zieht Claude ihn mit `dismiss_task` zurück.
 
 ### Arbeitsregeln
 
@@ -274,7 +296,7 @@ Skripte unter `.claude/hooks/`, verdrahtet in `.claude/settings.json`, beschrieb
 
 ### Zeiger-Skills (eigene, kein Wissensspeicher)
 
-- **`task-workflow`** – „Eine grössere Aufgabe planen, starten oder abschliessen, einen PR stellen und den Review-Auftrag für eine neue Session erzeugen …“ → `collaboration-rules.md` (Abschnitt „Review-Auftrag“), `plans-overview.md`, `todos/README.md`, `manual-e2e-testing.md`, `skills-overview.md`.
+- **`task-workflow`** – „Eine grössere Aufgabe planen, starten oder abschliessen, einen PR stellen und die Folgeaufgabe als Chip an eine neue Session übergeben …“ → `collaboration-rules.md` (Abschnitt „Übergabe an die nächste Session: der Chip“), `plans-overview.md`, `todos/README.md`, `manual-e2e-testing.md`, `skills-overview.md`.
 - **`project-docs`** – „Etwas in der Projektdoku ablegen, aktualisieren oder wiederfinden.“ → Wegweiser, Abgrenzungen, Konventionen; erinnert an die Wegweiser-Zeile. (Nicht `docs` nennen – kollidiert leicht mit globalen Skills.)
 - **`lesson`** – „Einen Fallstrick festhalten …“ → `lessons-overview.md`; eine Datei je Bereich; maschinell prüfbar → Hook.
 
@@ -287,7 +309,7 @@ Jeder endet mit: „Öffne die genannten Dateien, statt aus dem Gedächtnis zu a
 | `grilling` + `grill-me` | mattpocock/skills | Anforderungen in Interview-Runden schärfen, Lücken schliessen | Hinweisblock: Deutsch, REQUIREMENTS vorher greppen, Ergebnisse sofort in REQUIREMENTS/ADR/Plan persistieren |
 | `council` | Karpathys LLM Council | Beratung bei Unsicherheit: 5 Berater parallel → anonyme Gegenprüfung → Vorsitzender | Name = Ordnername, Deutsch, **nur auf Zustimmung** (Claude fragt „Soll ich den Council fragen?“), Berater/Prüfer Sonnet, Vorsitz Opus, keine HTML-Ausgabe, Architekturergebnis als ADR |
 | `qa-swarm` | pauldambra/dotfiles | PR-Review: Router (Sonnet) über den ganzen Diff, Delegation riskanter Hunks (Opus) an Linsen `qa-team`, `security-audit`, `reviewer`, `xp-reviewer`; Inline-Kommentare + eine Sticky-Zusammenfassung | **Flach statt verschachtelt** (siehe unten), Linsen **lokal** unter `references/` neu schreiben (Stack-spezifisch), `coding-standards.md` als Pflichtlektüre, Basis `development`, Pflicht-Delegation bei Auth/Migration/Geld/Personendaten/CI/>400 Zeilen, Bot-Kennung auf Deutsch, Review per `gh api … --input <json>` posten, `event: COMMENT` |
-| `review-triage` | pauldambra/dotfiles | Einstieg nach jedem PR, **in einer eigenen Session** (Start über den Review-Auftrag): startet qa-swarm, sortiert Threads (umsetzbar → fixen und pushen; Kleinigkeit → antworten und schliessen; unklar → Autonomie-Leiter; menschlich → nie anfassen); äussere Schleife max. 3 Runden; Bericht mit offenen Punkten sortiert für den Menschen | `paul-pair` durch lokale `references/autonomy-ladder.md` ersetzen (Pflicht-Rückfrage bei Architektur, Schema, Auth, Geld, Abhängigkeiten, Infra), `pr-shepherd`/`ci-shepherd`/`stamphog` entfernen, Fixes nur bei grünen Tests pushen. **Session-Trennung:** Eingabe ist die PR-Nummer (fehlt sie → nachfragen, nicht raten); gelesen werden nur PR-Beschreibung, Diff, `coding-standards.md` und die im Auftrag genannten Dateien; Abschluss wie im Auftrag (Ergebnisbericht „Review“, Todo/Plan nach `done/`) |
+| `review-triage` | pauldambra/dotfiles | Einstieg nach jedem PR, **in einer eigenen Session** (Start per Klick auf den Review-Chip): startet qa-swarm, sortiert Threads (umsetzbar → fixen und pushen; Kleinigkeit → antworten und schliessen; unklar → Autonomie-Leiter; menschlich → nie anfassen); äussere Schleife max. 3 Runden; Bericht mit offenen Punkten sortiert für den Menschen | `paul-pair` durch lokale `references/autonomy-ladder.md` ersetzen (Pflicht-Rückfrage bei Architektur, Schema, Auth, Geld, Abhängigkeiten, Infra), `pr-shepherd`/`ci-shepherd`/`stamphog` entfernen, Fixes nur bei grünen Tests pushen. **Session-Trennung:** Eingabe ist die PR-Nummer (fehlt sie → nachfragen, nicht raten); startet im frischen Worktree, daher zuerst `gh pr checkout <nr>`; gelesen werden nur PR-Beschreibung, Diff, `coding-standards.md` und die im Auftrag genannten Dateien; Abschluss wie im Auftrag (Ergebnisbericht „Review“, Todo/Plan nach `done/`) |
 
 ### qa-swarm flach aufbauen – eine Persona, ein Agent
 
@@ -320,7 +342,7 @@ Das Original sieht zwei Ebenen vor: die Hauptsession startet vier Reviewer paral
 
 ### `skills-overview.md`
 
-Grafik (Mermaid-Flowchart: Idee → grilling → REQUIREMENTS → Council? → ADR → task-workflow → Umsetzung → Tests/Commit → PR? → Review-Auftrag → *neue Session* → review-triage ⟲ qa-swarm → Merge durch Mensch; Session-Grenzen als Subgraphen sichtbar machen) plus Tabellen: Stadium/Skill/Wann/Start, Modelle, Herkunft/Anpassung, Sicherheitsprüfung. Zusätzlich als PDF (z. B. HTML mit marked + mermaid von jsdelivr, gedruckt mit `msedge --headless=new --print-to-pdf --virtual-time-budget=20000`).
+Grafik (Mermaid-Flowchart: Idee → grilling → REQUIREMENTS → Council? → ADR → task-workflow → Umsetzungs-Chip → *neue Session* → Umsetzung → Tests/Commit → PR? → Review-Chip → *neue Session* → review-triage ⟲ qa-swarm → Merge durch Mensch; Session-Grenzen als Subgraphen sichtbar machen, Übergänge mit „Klick auf Chip“ beschriften) plus Tabellen: Stadium/Skill/Wann/Start, Modelle, Herkunft/Anpassung, Sicherheitsprüfung. Zusätzlich als PDF (z. B. HTML mit marked + mermaid von jsdelivr, gedruckt mit `msedge --headless=new --print-to-pdf --virtual-time-budget=20000`).
 
 ## 14. Subagenten `<docs>/agents-overview.md`
 
