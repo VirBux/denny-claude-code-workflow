@@ -228,7 +228,7 @@ Architecture Decision Records ergänzen REQUIREMENTS und Lessons: begründen Arc
 - **Tests:** Unit/Integration/E2E getrennt ausführbar; Namen `should_<Erwartung>_when_<Bedingung>`; ARRANGE/ACT/ASSERT mit Warum im ARRANGE-Kommentar; Integration gegen echte Infrastruktur; handgeschriebene Doubles statt Mock-Frameworks; kein abgeschalteter Test; E2E zusätzlich, kein Aufruf verlässt den Rechner; Randfälle testen.
 - **Logging:** Stufen aus Konfiguration; Dev DEBUG für eigene Pakete, Prod WARN/ERROR; keine Konsolenausgabe; keine Personendaten im Log.
 - **Datenbank:** Migrationen nie rückwirkend ändern.
-- **Frontend:** keine harten Farben ausserhalb der Token-Datei; globales CSS nur als Imports, Thematisches in Partials; kein `console.log`.
+- **Frontend:** keine harten Farben ausserhalb der Token-Datei; globales CSS nur als Imports, Thematisches in Partials; kein `console.log`; Zugriff (`public`/`protected`/`private`) an jeder Methode und jedem Feld einer Klasse ausschreiben, auch in Test-Doubles.
 - Regeln, die der Stop-Hook prüft, mit **[Hook]** markieren.
 
 ## 12. Hooks – Regeln, die sich selbst prüfen
